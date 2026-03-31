@@ -6,7 +6,7 @@ radiological assessments. JSON mode ensures structured output.
 """
 
 import json
-from openai import OpenAI
+from openai import AsyncOpenAI
 from config import settings
 
 SYSTEM_PROMPT = """Você é um assistente especializado em análise de imagens radiológicas,
@@ -65,7 +65,7 @@ class ClaudeService:
     """
 
     def __init__(self):
-        self.client = OpenAI(api_key=settings.openai_api_key)
+        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     async def analyze_xray(
         self, image_b64: str, media_type: str, original_filename: str = "imagem.jpg"
@@ -76,7 +76,7 @@ class ClaudeService:
         PDFs are not natively supported by the OpenAI vision endpoint;
         if a PDF is passed, a warning is returned instead.
         """
-        prompt = ANALYSIS_PROMPT.format(filename=original_filename)
+        prompt = ANALYSIS_PROMPT.replace("{filename}", original_filename)
 
         if media_type == "application/pdf":
             return _pdf_not_supported()
@@ -92,7 +92,7 @@ class ClaudeService:
             {"type": "text", "text": prompt},
         ]
 
-        response = self.client.chat.completions.create(
+        response = await self.client.chat.completions.create(
             model=MODEL,
             max_tokens=4096,
             response_format={"type": "json_object"},
