@@ -1,11 +1,12 @@
 """
-Claude API service for X-ray image analysis.
+OpenAI service for X-ray image analysis.
 
-Uses Claude Opus 4.6 with vision capabilities and adaptive thinking
-to provide detailed radiological assessments.
+Uses GPT-4o with vision capabilities to provide detailed
+radiological assessments. JSON mode ensures structured output.
 """
 
-import anthropic
+import json
+from openai import OpenAI
 from config import settings
 
 SYSTEM_PROMPT = """Você é um assistente especializado em análise de imagens radiológicas,
@@ -55,61 +56,53 @@ Arquivo analisado: {filename}
 
 IMPORTANTE: Retorne APENAS o JSON, sem texto adicional antes ou depois."""
 
+MODEL = "gpt-4o"
+
 
 class ClaudeService:
+    """
+    Named ClaudeService for API compatibility; now backed by OpenAI GPT-4o.
+    """
+
     def __init__(self):
-        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.client = OpenAI(api_key=settings.openai_api_key)
 
     async def analyze_xray(
         self, image_b64: str, media_type: str, original_filename: str = "imagem.jpg"
     ) -> dict:
         """
-        Analyze an X-ray image using Claude's vision capabilities.
+        Analyze an X-ray image using GPT-4o vision.
 
-        Uses adaptive thinking for thorough radiological assessment.
-        Returns a structured diagnostic report as a dict.
+        PDFs are not natively supported by the OpenAI vision endpoint;
+        if a PDF is passed, a warning is returned instead.
         """
         prompt = ANALYSIS_PROMPT.format(filename=original_filename)
 
         if media_type == "application/pdf":
-            message_content = [
-                {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "application/pdf",
-                        "data": image_b64,
-                    },
-                },
-                {"type": "text", "text": prompt},
-            ]
-        else:
-            message_content = [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": media_type,
-                        "data": image_b64,
-                    },
-                },
-                {"type": "text", "text": prompt},
-            ]
+            return _pdf_not_supported()
 
-        with self.client.messages.stream(
-            model="claude-opus-4-6",
+        message_content = [
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{media_type};base64,{image_b64}",
+                    "detail": "high",
+                },
+            },
+            {"type": "text", "text": prompt},
+        ]
+
+        response = self.client.chat.completions.create(
+            model=MODEL,
             max_tokens=4096,
-            thinking={"type": "adaptive"},
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": message_content}],
-        ) as stream:
-            response = stream.get_final_message()
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": message_content},
+            ],
+        )
 
-        raw_text = next(
-            (b.text for b in response.content if b.type == "text"), ""
-        ).strip()
-
-        import json
+        raw_text = response.choices[0].message.content or ""
 
         try:
             if raw_text.startswith("```"):
@@ -122,12 +115,8 @@ class ClaudeService:
             result = _parse_fallback(raw_text)
 
         result["raw_response"] = raw_text
-        result["model"] = "claude-opus-4-6"
-        result["thinking_tokens"] = sum(
-            len(b.thinking) if hasattr(b, "thinking") else 0
-            for b in response.content
-            if b.type == "thinking"
-        )
+        result["model"] = MODEL
+        result["thinking_tokens"] = 0
         return result
 
     def build_search_text(self, diagnosis: dict) -> str:
@@ -142,6 +131,24 @@ class ClaudeService:
         for c in diagnosis.get("areas_of_concern", []):
             parts.append(c.get("observation", ""))
         return " ".join(filter(None, parts))
+
+
+def _pdf_not_supported() -> dict:
+    return {
+        "image_quality": {"score": "Ruim", "notes": "PDFs não são suportados pelo endpoint de visão do OpenAI. Converta para PNG/JPG antes de enviar."},
+        "region": "Desconhecido",
+        "laterality": "N/A",
+        "findings": [],
+        "normal_structures": [],
+        "areas_of_concern": [],
+        "risk_level": "Indeterminado",
+        "summary": "Formato PDF não suportado. Envie a imagem em formato PNG, JPG ou WEBP.",
+        "recommendations": ["Converter o PDF para imagem (PNG/JPG) e reenviar"],
+        "confidence": 0,
+        "disclaimer": "Esta análise é gerada por IA para suporte à decisão clínica e deve ser revisada por um radiologista certificado.",
+        "model": MODEL,
+        "thinking_tokens": 0,
+    }
 
 
 def _parse_fallback(text: str) -> dict:

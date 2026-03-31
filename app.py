@@ -157,7 +157,7 @@ async def health():
     es_ok = await es_service.ping()
     return {
         "status": "ok",
-        "claude": bool(settings.anthropic_api_key),
+        "openai": bool(settings.openai_api_key),
         "elasticsearch": es_ok,
         "storage_mode": "elasticsearch" if es_ok else "memory",
     }

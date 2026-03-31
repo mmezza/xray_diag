@@ -23,15 +23,15 @@ async function checkHealth() {
     const dot   = document.getElementById('status-dot');
     const label = document.getElementById('status-label');
 
-    if (!data.claude) {
+    if (!data.openai) {
       dot.className = 'status-dot error';
-      label.textContent = 'Claude API não configurado';
+      label.textContent = 'OpenAI API não configurado';
     } else if (!data.elasticsearch) {
       dot.className = 'status-dot warn';
-      label.textContent = 'Claude OK · ES: memória';
+      label.textContent = 'OpenAI OK · ES: memória';
     } else {
       dot.className = 'status-dot ok';
-      label.textContent = 'Claude + Elasticsearch OK';
+      label.textContent = 'OpenAI + Elasticsearch OK';
     }
   } catch {
     document.getElementById('status-dot').className = 'status-dot error';

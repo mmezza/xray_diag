@@ -3,7 +3,7 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    anthropic_api_key: str = ""
+    openai_api_key: str = ""
     elasticsearch_url: Optional[str] = None
     elasticsearch_api_key: Optional[str] = None
     elasticsearch_username: Optional[str] = None
