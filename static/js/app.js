@@ -98,6 +98,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   previewSec.classList.add('hidden');
   dropZone.classList.remove('hidden');
   document.getElementById('result-card').classList.add('hidden');
+  document.getElementById('similar-section').classList.add('hidden');
 });
 
 // ── Analyze ──
@@ -129,6 +130,9 @@ document.getElementById('btn-analyze').addEventListener('click', async () => {
     loadingOverlay.classList.add('hidden');
     renderDiagnosis(data.diagnosis, resultBody);
     setRiskBadge(data.diagnosis?.risk_level || 'Indeterminado');
+
+    // Load similar cases via vector search
+    loadSimilarCases(data.id);
 
   } catch (err) {
     loadingOverlay.classList.add('hidden');
@@ -427,4 +431,99 @@ async function deleteImage(id) {
   } catch {
     alert('Erro ao excluir.');
   }
+}
+
+// ── Similar cases (vector search) ──
+async function loadSimilarCases(imageId) {
+  const section = document.getElementById('similar-section');
+  const grid    = document.getElementById('similar-grid');
+
+  section.classList.remove('hidden');
+  grid.innerHTML = '<div class="empty-state" style="padding:20px">Buscando casos similares via kNN...</div>';
+
+  try {
+    const res  = await fetch(`/api/images/${imageId}/similar?size=5`);
+    const data = await res.json();
+
+    if (!data.similar || !data.similar.length) {
+      grid.innerHTML = '<div class="empty-state" style="padding:20px">Nenhum caso similar encontrado. Faça o upload de mais imagens para comparação.</div>';
+      return;
+    }
+
+    grid.innerHTML = data.similar.map(img => similarCard(img)).join('');
+    grid.querySelectorAll('.similar-card-item').forEach((card, i) => {
+      card.addEventListener('click', () => openModal(data.similar[i]));
+    });
+  } catch {
+    grid.innerHTML = '<div class="empty-state" style="padding:20px;color:var(--danger)">Erro ao buscar casos similares.</div>';
+  }
+}
+
+function similarCard(img) {
+  const d    = img.diagnosis || {};
+  const risk = d.risk_level  || 'Indeterminado';
+  const sim  = img._similarity != null ? img._similarity : (img._score != null ? img._score : null);
+  const pct  = sim != null ? Math.round(sim * 100) : null;
+  const imgSrc = img.stored_filename ? `/uploads/${img.stored_filename}` : null;
+
+  let scoreClass = '';
+  if (pct != null) {
+    if (pct >= 80) scoreClass = 'high';
+    else if (pct >= 60) scoreClass = 'med';
+  }
+
+  return `<div class="similar-card-item">
+    <div class="similar-img-wrap">
+      ${imgSrc
+        ? `<img class="similar-img" src="${esc(imgSrc)}" alt="${esc(img.original_filename)}" loading="lazy"/>`
+        : `<div class="similar-img-placeholder">🩻</div>`}
+    </div>
+    <div class="similar-info">
+      <div class="similar-name" title="${esc(img.original_filename)}">${esc(img.original_filename)}</div>
+      <div class="similar-footer">
+        <span class="risk-badge risk-${esc(risk)}" style="font-size:.7rem;padding:2px 8px">${esc(risk)}</span>
+        ${pct != null ? `<span class="similarity-score ${scoreClass}">${pct}%</span>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Search mode badge for search results ──
+const _origRenderGrid = renderGrid;
+function renderGrid(images, grid) {
+  if (!images || !images.length) {
+    grid.innerHTML = '<div class="empty-state">Nenhuma análise encontrada.</div>';
+    return;
+  }
+  grid.innerHTML = images.map(img => historyCardWithScore(img)).join('');
+  grid.querySelectorAll('.history-card').forEach((card, i) => {
+    card.addEventListener('click', () => openModal(images[i]));
+  });
+}
+
+function historyCardWithScore(img) {
+  const d    = img.diagnosis || {};
+  const risk = d.risk_level  || 'Indeterminado';
+  const date = img.upload_date
+    ? new Date(img.upload_date).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+    : '—';
+  const imgSrc = img.stored_filename ? `/uploads/${img.stored_filename}` : null;
+  const score  = img._score != null ? img._score.toFixed(3) : null;
+  const mode   = img._search_mode;
+
+  return `<div class="history-card">
+    <div class="history-img-wrap">
+      ${imgSrc
+        ? `<img class="history-img" src="${esc(imgSrc)}" alt="${esc(img.original_filename)}" loading="lazy"/>`
+        : `<div class="history-img-placeholder">🩻</div>`}
+    </div>
+    <div class="history-info">
+      <div class="history-name" title="${esc(img.original_filename)}">${esc(img.original_filename)}${mode ? `<span class="search-mode-badge">${esc(mode)}</span>` : ''}</div>
+      <div class="history-date">${date}${score ? ` · score: ${score}` : ''}</div>
+      <div class="history-footer">
+        <span class="history-region">${esc(d.region || '—')}</span>
+        <span class="risk-badge risk-${esc(risk)}">${esc(risk)}</span>
+      </div>
+    </div>
+  </div>`;
 }
