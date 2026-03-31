@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>XRay Diagnostics — Análise por IA</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⚕</span>
+        <span class="logo-text">XRay <span class="accent">Diagnostics</span></span>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-tab="upload">Upload</button>
+        <button class="nav-btn" data-tab="history">Histórico</button>
+        <button class="nav-btn" data-tab="search">Busca</button>
+        <button class="nav-btn" data-tab="stats">Estatísticas</button>
+      </nav>
+      <div class="status-bar">
+        <span id="status-dot" class="status-dot"></span>
+        <span id="status-label">Verificando...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ===== TAB: UPLOAD ===== -->
+    <section id="tab-upload" class="tab active">
+      <div class="two-col">
+
+        <!-- LEFT: Upload zone -->
+        <div class="card upload-card">
+          <h2 class="card-title">Enviar Raio-X</h2>
+          <p class="card-subtitle">JPG, PNG, WEBP, TIFF ou PDF · máx. 20 MB</p>
+
+          <div id="drop-zone" class="drop-zone">
+            <div class="drop-icon">🩻</div>
+            <p class="drop-text">Arraste a imagem aqui</p>
+            <p class="drop-sub">ou</p>
+            <label class="btn btn-primary" for="file-input">Selecionar arquivo</label>
+            <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.pdf" hidden/>
+          </div>
+
+          <!-- Preview -->
+          <div id="preview-section" class="preview-section hidden">
+            <img id="preview-img" class="preview-img" src="" alt="Preview"/>
+            <div id="preview-info" class="preview-info">
+              <span id="preview-name" class="preview-name"></span>
+              <span id="preview-size" class="preview-size"></span>
+            </div>
+            <div class="btn-row">
+              <button id="btn-analyze" class="btn btn-primary btn-full">
+                <span class="btn-icon">🔬</span> Analisar com IA
+              </button>
+              <button id="btn-clear" class="btn btn-ghost">Limpar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Results -->
+        <div id="result-card" class="card result-card hidden">
+          <div class="result-header">
+            <h2 class="card-title">Resultado da Análise</h2>
+            <span id="result-risk-badge" class="risk-badge">—</span>
+          </div>
+
+          <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="spinner"></div>
+            <p>Analisando imagem com Claude Opus 4.6...</p>
+            <p class="loading-sub">O modelo está usando raciocínio adaptativo</p>
+          </div>
+
+          <div id="result-body" class="result-body">
+            <!-- dynamically filled -->
+          </div>
+        </div>
+
+      </div><!-- end two-col -->
+    </section>
+
+    <!-- ===== TAB: HISTORY ===== -->
+    <section id="tab-history" class="tab hidden">
+      <div class="section-header">
+        <h2>Histórico de Análises</h2>
+        <button id="btn-refresh-history" class="btn btn-ghost btn-sm">↻ Atualizar</button>
+      </div>
+      <div id="history-grid" class="history-grid">
+        <div class="empty-state">Nenhuma análise ainda. Faça o upload de um raio-X.</div>
+      </div>
+    </section>
+
+    <!-- ===== TAB: SEARCH ===== -->
+    <section id="tab-search" class="tab hidden">
+      <div class="card search-card">
+        <h2 class="card-title">Busca Semântica</h2>
+        <p class="card-subtitle">Pesquise por achados, regiões, risco ou descrições clínicas</p>
+        <div class="search-row">
+          <input id="search-input" class="search-input" type="text"
+            placeholder="ex: pneumonia, consolidação pulmonar, fratura, normal..."/>
+          <button id="btn-search" class="btn btn-primary">Buscar</button>
+        </div>
+        <div class="search-suggestions">
+          <span class="suggestion-label">Sugestões:</span>
+          <button class="chip" onclick="quickSearch('tórax')">tórax</button>
+          <button class="chip" onclick="quickSearch('pneumonia')">pneumonia</button>
+          <button class="chip" onclick="quickSearch('fratura')">fratura</button>
+          <button class="chip" onclick="quickSearch('normal')">normal</button>
+          <button class="chip" onclick="quickSearch('risco alto')">risco alto</button>
+          <button class="chip" onclick="quickSearch('coluna')">coluna</button>
+        </div>
+      </div>
+      <div id="search-results" class="history-grid"></div>
+    </section>
+
+    <!-- ===== TAB: STATS ===== -->
+    <section id="tab-stats" class="tab hidden">
+      <div class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-icon">📊</div>
+          <div class="stat-value" id="stat-total">—</div>
+          <div class="stat-label">Total analisado</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon">🔴</div>
+          <div class="stat-value" id="stat-high">—</div>
+          <div class="stat-label">Risco Alto / Crítico</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon">🟡</div>
+          <div class="stat-value" id="stat-mod">—</div>
+          <div class="stat-label">Risco Moderado</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon">🟢</div>
+          <div class="stat-value" id="stat-normal">—</div>
+          <div class="stat-label">Normal / Baixo Risco</div>
+        </div>
+      </div>
+
+      <div class="two-col mt-20">
+        <div class="card">
+          <h3 class="card-title-sm">Por Nível de Risco</h3>
+          <div id="chart-risk" class="bar-chart"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title-sm">Por Região Anatômica</h3>
+          <div id="chart-region" class="bar-chart"></div>
+        </div>
+      </div>
+
+      <div class="card mt-20">
+        <h3 class="card-title-sm">Armazenamento</h3>
+        <p id="storage-info" class="storage-info">—</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: Full diagnosis view -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <button id="modal-close" class="modal-close">✕</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
